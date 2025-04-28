@@ -163,7 +163,6 @@ app.delete('/items/:id', async (req, res) => {
 
         if (deletedItem) {
             res.status(200).json({ message: 'Item deleted successfully', deletedItem });
-             // Or standard practice: res.status(204).send(); // 204 No Content
         } else {
             res.status(404).json({ message: 'Item not found' });
         }
