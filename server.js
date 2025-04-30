@@ -2,10 +2,17 @@ require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
+
+const AUTH_USER = process.env.AUTH_USER;
+const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
+
+if (!AUTH_USER || !AUTH_PASSWORD) {
+    console.error("FATAL ERROR: AUTH_USER and AUTH_PASSWORD enviroment variables must be set");
+    process.exit(1);
+}
 
 app.use(express.json());
 
@@ -44,8 +51,46 @@ const itemSchema = new mongoose.Schema({
 
 const Item = mongoose.model('Item', itemSchema);
 
+const basicAuthMiddleware = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
+        return res.status(401).json({ message: 'Authentication required.' });
+    }
 
+    const [type, credentials] = authHeader.split(' ');
 
+    if (type !== 'Basic' || !credentials) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
+        return res.status(401).json({ message: 'Invalid authentication type or format. Use Basic Auth' });
+    }
+
+    let decoded;
+    try {
+        decoded = Buffer.from(credentials, 'base64').toString('utf8');
+
+    } catch (err) {
+        console.error("Base64 decoding failed:", err);
+        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
+        return res.status(401).json({ message: 'Invalid authentication credentials format' });
+
+    }
+
+    const [username, password] = decoded.split(':');
+
+    if (username === AUTH_USER && password === AUTH_PASSWORD) {
+        console.log(`User ${username} authenticated successfully.`);
+        next();
+    } else {
+        console.warn(`Authentication failed for user: ${username}`);
+        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
+        return res.status(401).json({ message: 'Invalid username or password.' });
+    }
+};
+
+app.use('/items', basicAuthMiddleware);
+app.use(express.urlencoded());
 
 app.get('/items', async (req, res) => {
     console.log('GET /items request received');
@@ -152,6 +197,7 @@ app.put('/items/:id', async (req, res) => {
 
 app.delete('/items/:id', async (req, res) => {
     const { id } = req.params;
+    console.log(`request param is: ${id}`);
     console.log(`DELETE /items/${id} request received`);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
