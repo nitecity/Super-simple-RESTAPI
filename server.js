@@ -6,10 +6,10 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-const AUTH_USER = process.env.AUTH_USER;
-const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
+const SECRET_BEARER_TOKEN = process.env.SECRET_BEARER_TOKEN;
 
-if (!AUTH_USER || !AUTH_PASSWORD) {
+
+if (!SECRET_BEARER_TOKEN) {
     console.error("FATAL ERROR: AUTH_USER and AUTH_PASSWORD enviroment variables must be set");
     process.exit(1);
 }
@@ -51,45 +51,32 @@ const itemSchema = new mongoose.Schema({
 
 const Item = mongoose.model('Item', itemSchema);
 
-const basicAuthMiddleware = (req, res, next) => {
+const bearerTokenMiddleware = (req, res, next) => {
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
         return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const [type, credentials] = authHeader.split(' ');
+    const parts = authHeader.split(' ');
+    console.log(parts);
 
-    if (type !== 'Basic' || !credentials) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
-        return res.status(401).json({ message: 'Invalid authentication type or format. Use Basic Auth' });
+    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+        return res.status(401).json({ message: 'Invalid authentication type or format. Use "Bearer <token>".' });
     }
 
-    let decoded;
-    try {
-        decoded = Buffer.from(credentials, 'base64').toString('utf8');
+    const providedToken = parts[1];
 
-    } catch (err) {
-        console.error("Base64 decoding failed:", err);
-        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
-        return res.status(401).json({ message: 'Invalid authentication credentials format' });
-
-    }
-
-    const [username, password] = decoded.split(':');
-
-    if (username === AUTH_USER && password === AUTH_PASSWORD) {
-        console.log(`User ${username} authenticated successfully.`);
+    if (providedToken === SECRET_BEARER_TOKEN) {
+        console.log('Bearer token authentication successful.');
         next();
     } else {
-        console.warn(`Authentication failed for user: ${username}`);
-        res.setHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
-        return res.status(401).json({ message: 'Invalid username or password.' });
+        console.warn('Bearer token authentication failed: Invalid token provided.');
+        return res.status(401).json({ message: 'Invalid authentication token.' });
     }
 };
 
-app.use('/items', basicAuthMiddleware);
+app.use('/items', bearerTokenMiddleware);
 app.use(express.urlencoded());
 
 app.get('/items', async (req, res) => {
