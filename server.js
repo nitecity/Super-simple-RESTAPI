@@ -82,8 +82,8 @@ const APICredentials = (req, res, next) => {
         }
 
         const prehash = method + path + hts;
-        const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
-        const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
+        const hmac = CryptoJS.HmacSHA256(prehash, client_credentials.secret);
+        const expectedSignature = CryptoJS.enc.Base64.stringify(hmac);
         if (expectedSignature !== hsigniture) {
             console.log('Signature Failure');
             return res.status(401).json({ message: "Signature Failure" });
@@ -107,8 +107,8 @@ const APICredentials = (req, res, next) => {
             body = JSON.stringify(body);
         }
         const prehash = method + path + hts + body;
-        const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
-        const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
+        const hmac = CryptoJS.HmacSHA256(prehash, client_credentials.secret);
+        const expectedSignature = CryptoJS.enc.Base64.stringify(hmac);
 
         if (expectedSignature !== hsigniture) {
             console.log('Signature Failure');
