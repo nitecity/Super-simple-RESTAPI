@@ -1,9 +1,11 @@
 require('dotenv').config();
 
+const CryptoJS = require('crypto-js');
 const express = require('express');
 const mongoose = require('mongoose');
 const app = express();
 
+const path = '/items';
 const PORT = process.env.PORT || 3000;
 
 const SECRET_BEARER_TOKEN = process.env.SECRET_BEARER_TOKEN;
@@ -51,35 +53,62 @@ const itemSchema = new mongoose.Schema({
 
 const Item = mongoose.model('Item', itemSchema);
 
-const bearerTokenMiddleware = (req, res, next) => {
-    const authHeader = req.headers.authorization;
+const APICredentials = (req, res, next) => {
+    const client_credentials = {
+        api_key: process.env.API_KEY,
+        secret: process.env.SECRET
+    }
+
+    let rdata;
+    if (typeof req.headers === 'string') {
+        rdata = JSON.parse(req.headers);
+    } else if (typeof req.headers === 'object') {
+        rdata = req.headers;
+    }
+
+    if (req.method === 'GET'){
+        try {
+            const hapi_key = rdata.access_key;
+            const hsigniture = rdata.access_sign;
+            const hts = rdata.access_timestamp;
+            const method = req.method;
     
-    if (!authHeader) {
-        return res.status(401).json({ message: 'Authentication required.' });
-    }
-
-    const parts = authHeader.split(' ');
-    console.log(parts);
-
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-        return res.status(401).json({ message: 'Invalid authentication type or format. Use "Bearer <token>".' });
-    }
-
-    const providedToken = parts[1];
-
-    if (providedToken === SECRET_BEARER_TOKEN) {
-        console.log('Bearer token authentication successful.');
-        next();
+            if (hapi_key !== client_credentials.api_key) {
+                console.log('Invalid Credential');
+                return res.status(401).json({ message: "Invalid Credential" });
+            }
+    
+            const prehash = method + path + hts;
+            const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
+            const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
+            if (expectedSignature !== hsigniture) {
+                console.log('Signature Failure');
+                return res.status(401).json({ message: "Signature Failure" });
+            }
+            
+            console.log('Authentication successful.');
+            next();
+        } catch(err) {
+            console.log('Check your headers again!');
+            return res.status(401).json({ message: "Check your headers again!" });
+        }
+    } else if (req.method === 'POST') {
+        return res.status(404).json({ message: "I will handle POST requests soon!" });
+    } else if (req.method === 'PUT') {
+        return res.status(404).json({ message: "I will handle PUT requests soon!" });
+    } else if (req.method === 'DELETE') {
+        return res.status(404).json({ message: "I will handle DELETE requests soon!" });
     } else {
-        console.warn('Bearer token authentication failed: Invalid token provided.');
-        return res.status(401).json({ message: 'Invalid authentication token.' });
+        console.log('Script broke!');
+        return res.status(500).json({ message: "something broke in our end" });
     }
+
 };
 
-app.use('/items', bearerTokenMiddleware);
+app.use(path, APICredentials);
 app.use(express.urlencoded());
 
-app.get('/items', async (req, res) => {
+app.get(path, async (req, res) => {
     console.log('GET /items request received');
     try {
         const items = await Item.find({});
@@ -94,7 +123,7 @@ app.get('/items', async (req, res) => {
 
 
 
-app.get('/items/:id', async (req, res) => {
+app.get(`${path}/:id`, async (req, res) => {
     const {id} = req.params;
     console.log(`GET /items/${id} request received`);
 
@@ -119,7 +148,7 @@ app.get('/items/:id', async (req, res) => {
 
 
 
-app.post('/items', async (req, res) => {
+app.post(path, async (req, res) => {
     console.log('POST /items request received with body:', req.body);
     const { name } = req.body;
 
@@ -144,7 +173,7 @@ app.post('/items', async (req, res) => {
 
 
 
-app.put('/items/:id', async (req, res) => {
+app.put(`${path}/:id`, async (req, res) => {
     const { id } = req.params;
     const { name } = req.body;
     console.log(`PUT /items/${id} request received with body:`, req.body);
@@ -182,7 +211,7 @@ app.put('/items/:id', async (req, res) => {
 
 
 
-app.delete('/items/:id', async (req, res) => {
+app.delete(`${path}/:id`, async (req, res) => {
     const { id } = req.params;
     console.log(`request param is: ${id}`);
     console.log(`DELETE /items/${id} request received`);
