@@ -66,34 +66,58 @@ const APICredentials = (req, res, next) => {
         rdata = req.headers;
     }
 
-    if (req.method === 'GET'){
-        try {
-            const hapi_key = rdata.access_key;
-            const hsigniture = rdata.access_sign;
-            const hts = rdata.access_timestamp;
-            const method = req.method;
-    
-            if (hapi_key !== client_credentials.api_key) {
-                console.log('Invalid Credential');
-                return res.status(401).json({ message: "Invalid Credential" });
-            }
-    
-            const prehash = method + path + hts;
-            const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
-            const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
-            if (expectedSignature !== hsigniture) {
-                console.log('Signature Failure');
-                return res.status(401).json({ message: "Signature Failure" });
-            }
-            
-            console.log('Authentication successful.');
-            next();
-        } catch(err) {
-            console.log('Check your headers again!');
-            return res.status(401).json({ message: "Check your headers again!" });
+    console.log(rdata)
+
+    const hapi_key = rdata.access_key;
+    const hsigniture = rdata.access_sign;
+    const hts = rdata.access_timestamp;
+    const method = req.method;
+    let body = req.body;
+
+    if (method === 'GET'){
+
+        if (hapi_key !== client_credentials.api_key) {
+            console.log('Invalid Credential');
+            return res.status(401).json({ message: "Invalid Credential" });
         }
-    } else if (req.method === 'POST') {
-        return res.status(404).json({ message: "I will handle POST requests soon!" });
+
+        const prehash = method + path + hts;
+        const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
+        const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
+        if (expectedSignature !== hsigniture) {
+            console.log('Signature Failure');
+            return res.status(401).json({ message: "Signature Failure" });
+        }
+        
+        console.log('Authentication successful.');
+        next();
+        
+    } else if (method === 'POST') {
+        
+        if (hapi_key !== client_credentials.api_key) {
+            console.log('Invalid Credential');
+            return res.status(401).json({ message: "Invalid Credential" });
+        }
+
+        if(!body) {
+            return res.status(401).json({ message: "POST requests must have a body" });
+        }
+
+        if (typeof body !== 'string'){
+            body = JSON.stringify(body);
+        }
+        const prehash = method + path + hts + body;
+        const hex_signature = CryptoJS.HmacSHA256(prehash, client_credentials.secret).toString();
+        const expectedSignature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(hex_signature));
+
+        if (expectedSignature !== hsigniture) {
+            console.log('Signature Failure');
+            return res.status(401).json({ message: "Signature Failure" });
+        }
+        
+        console.log('Authentication successful.');
+        next();
+
     } else if (req.method === 'PUT') {
         return res.status(404).json({ message: "I will handle PUT requests soon!" });
     } else if (req.method === 'DELETE') {
