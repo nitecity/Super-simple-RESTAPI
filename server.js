@@ -10,10 +10,9 @@ const PORT = process.env.PORT || 3000;
 
 const SECRET_BEARER_TOKEN = process.env.SECRET_BEARER_TOKEN;
 
-
-if (!SECRET_BEARER_TOKEN) {
-    console.error("FATAL ERROR: AUTH_USER and AUTH_PASSWORD enviroment variables must be set");
-    process.exit(1);
+const client_credentials = {
+    api_key: process.env.API_KEY,
+    secret: process.env.SECRET
 }
 
 app.use(express.json());
@@ -53,78 +52,61 @@ const itemSchema = new mongoose.Schema({
 
 const Item = mongoose.model('Item', itemSchema);
 
-const APICredentials = (req, res, next) => {
-    const client_credentials = {
-        api_key: process.env.API_KEY,
-        secret: process.env.SECRET
+function check_signature(headers, res, next){
+
+    if (headers.api_key !== client_credentials.api_key) {
+        console.log('Invalid Credential');
+        return res.status(401).json({ message: "Invalid Credential" });
     }
 
-    let rdata;
-    if (typeof req.headers === 'string') {
-        rdata = JSON.parse(req.headers);
-    } else if (typeof req.headers === 'object') {
-        rdata = req.headers;
-    }
-
-    console.log(rdata)
-
-    const hapi_key = rdata.access_key;
-    const hsigniture = rdata.access_sign;
-    const hts = rdata.access_timestamp;
-    const method = req.method;
-    let body = req.body;
-
-    if (method === 'GET'){
-
-        if (hapi_key !== client_credentials.api_key) {
-            console.log('Invalid Credential');
-            return res.status(401).json({ message: "Invalid Credential" });
-        }
-
-        const prehash = method + path + hts;
+    if (!headers.body){
+        const prehash = headers.method + path + headers.ts;
         const hmac = CryptoJS.HmacSHA256(prehash, client_credentials.secret);
         const expectedSignature = CryptoJS.enc.Base64.stringify(hmac);
-        if (expectedSignature !== hsigniture) {
+        if (expectedSignature !== headers.signiture) {
             console.log('Signature Failure');
             return res.status(401).json({ message: "Signature Failure" });
         }
         
         console.log('Authentication successful.');
         next();
-        
-    } else if (method === 'POST') {
-        
-        if (hapi_key !== client_credentials.api_key) {
-            console.log('Invalid Credential');
-            return res.status(401).json({ message: "Invalid Credential" });
-        }
-
-        if(!body) {
-            return res.status(401).json({ message: "POST requests must have a body" });
-        }
-
-        if (typeof body !== 'string'){
-            body = JSON.stringify(body);
-        }
-        const prehash = method + path + hts + body;
-        const hmac = CryptoJS.HmacSHA256(prehash, client_credentials.secret);
-        const expectedSignature = CryptoJS.enc.Base64.stringify(hmac);
-
-        if (expectedSignature !== hsigniture) {
-            console.log('Signature Failure');
-            return res.status(401).json({ message: "Signature Failure" });
-        }
-        
-        console.log('Authentication successful.');
-        next();
-
-    } else if (req.method === 'PUT') {
-        return res.status(404).json({ message: "I will handle PUT requests soon!" });
-    } else if (req.method === 'DELETE') {
-        return res.status(404).json({ message: "I will handle DELETE requests soon!" });
     } else {
-        console.log('Script broke!');
-        return res.status(500).json({ message: "something broke in our end" });
+
+        const prehash = headers.method + path + headers.ts + JSON.stringify(headers.body);
+        const hmac = CryptoJS.HmacSHA256(prehash, client_credentials.secret);
+        const expectedSignature = CryptoJS.enc.Base64.stringify(hmac);
+        if (expectedSignature !== headers.signiture) {
+            console.log('Signature Failure');
+            return res.status(401).json({ message: "Signature Failure" });
+        }
+        
+        console.log('Authentication successful.');
+        next();
+    }
+
+    
+}
+
+const APICredentials = (req, res, next) => {
+
+    const rdata = req.headers;
+
+    const headers = {
+        method:    req.method,
+        api_key:   rdata.access_key,
+        signiture: rdata.access_sign,
+        ts:        rdata.access_timestamp,
+        body:      req.body
+    }
+
+    if (headers.method === 'GET'){
+        check_signature(headers, res, next);
+    } else if (headers.method === 'POST') {
+        check_signature(headers, res, next);
+    } else if (headers.method === 'PUT') {
+        check_signature(headers, res, next);
+    } else if (headers.method === 'DELETE') {
+        check_signature(headers, res, next)
     }
 
 };
