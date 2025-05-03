@@ -99,15 +99,7 @@ const APICredentials = (req, res, next) => {
         body:      req.body
     }
 
-    if (headers.method === 'GET'){
-        check_signature(headers, res, next);
-    } else if (headers.method === 'POST') {
-        check_signature(headers, res, next);
-    } else if (headers.method === 'PUT') {
-        check_signature(headers, res, next);
-    } else if (headers.method === 'DELETE') {
-        check_signature(headers, res, next)
-    }
+    check_signature(headers, res, next);
 
 };
 
